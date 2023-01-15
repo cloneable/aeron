@@ -19,6 +19,7 @@ pub fn main() -> Result<(), Box<dyn Error + 'static>> {
     println!("cargo:rustc-link-search=native={}", libs.display());
 
     bindgen::builder()
+        .use_core()
         .header("wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .allowlist_function("aeron_.*")
