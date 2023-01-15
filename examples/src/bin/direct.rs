@@ -3,8 +3,7 @@ use aeron_client_sys::{
     aeron_async_add_publication_poll, aeron_context_init, aeron_init,
     aeron_publication_channel_status, aeron_publication_is_connected, aeron_start,
 };
-use core::ptr;
-use std::{hint::spin_loop, process::exit};
+use std::{process::exit, ptr, thread};
 
 fn main() {
     let channel = b"aeron:ipc\0" as *const u8 as *const i8;
@@ -39,7 +38,7 @@ fn main() {
             1 => break,
             e => handle_error(e),
         }
-        spin_loop();
+        thread::yield_now();
     }
     println!("aeron_async_add_publication_poll");
 
