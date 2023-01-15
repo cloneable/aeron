@@ -1,0 +1,13 @@
+[workspace]
+members = ["aeron", "aeron-client-sys", "examples"]
+default-members = ["aeron"]
+
+# Test with optimizations
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
+debug-assertions = false
