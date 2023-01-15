@@ -1,11 +1,12 @@
-use std::ffi::NulError;
+use aeron_client_sys::aeron_errmsg;
+use std::ffi::{CStr, NulError};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("FfiError {0}")]
-    FfiError(i32),
+    #[error("FfiError {0}: {1}")]
+    FfiError(i32, String),
     #[error("CString NulError: {0}")]
     NulError(#[from] NulError),
 }
@@ -14,9 +15,12 @@ pub(crate) fn aeron_result(code: i32) -> Result<()> {
     // TODO: aeron_errmsg
     match code {
         0 => Ok(()),
-        _ => {
-            println!("aeron_result: {code}");
-            Err(Error::FfiError(code))
-        }
+        _ => Err(aeron_error(code)),
     }
+}
+
+pub(crate) fn aeron_error(code: i32) -> Error {
+    let msg = unsafe { CStr::from_ptr(aeron_errmsg()) }.to_string_lossy();
+    println!("aeron_result: {code}");
+    Error::FfiError(code, msg.to_string())
 }

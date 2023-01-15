@@ -1,6 +1,6 @@
 use crate::{
     client::{Aeron, Position, StreamId},
-    error::{aeron_result, Error, Result},
+    error::{aeron_error, aeron_result, Result},
 };
 use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
@@ -22,11 +22,10 @@ impl Publication {
         let position = unsafe {
             aeron_publication_offer(self.inner, data.as_ptr(), data.len(), None, ptr::null_mut())
         };
-        if position >= 0 {
-            Ok(Position(position))
-        } else {
-            Err(Error::FfiError(position as i32))
+        if position < 0 {
+            aeron_result(position as i32)?;
         }
+        Ok(Position(position))
     }
 }
 
@@ -104,7 +103,7 @@ impl Future for AddPublication {
                             inner: publication,
                         }))
                     }
-                    e => Poll::Ready(Err(Error::FfiError(e))),
+                    e => Poll::Ready(Err(aeron_error(e))),
                 }
             }
         }
