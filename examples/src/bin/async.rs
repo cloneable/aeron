@@ -10,7 +10,9 @@ pub async fn main() -> color_eyre::Result<()> {
 
     println!("Trying to add publication...");
 
-    let add_publication = client.add_publication(&"aeron:ipc".to_owned(), StreamId(1001))?;
+    let add_publication = client
+        .clone()
+        .add_publication(&"aeron:ipc".to_owned(), StreamId(1001))?;
 
     println!("Awaiting publication...");
 
