@@ -13,6 +13,7 @@ use std::{
 };
 
 pub struct Publication {
+    _client: Arc<Aeron>,
     inner: *mut aeron_publication_t,
 }
 
@@ -37,12 +38,12 @@ impl Drop for Publication {
 
 #[must_use = "future must be polled"]
 pub struct AddPublication {
+    client: Arc<Aeron>,
     state: AddPublicationState,
 }
 
 enum AddPublicationState {
     Unstarted {
-        client: Arc<Aeron>,
         uri: String,
         stream_id: StreamId,
     },
@@ -54,8 +55,8 @@ enum AddPublicationState {
 impl AddPublication {
     pub(crate) fn new(client: Arc<Aeron>, uri: &String, stream_id: StreamId) -> Result<Self> {
         Ok(AddPublication {
+            client,
             state: AddPublicationState::Unstarted {
-                client,
                 uri: uri.clone(),
                 stream_id,
             },
@@ -67,19 +68,16 @@ impl Future for AddPublication {
     type Output = Result<Publication>;
 
     fn poll(mut self: Pin<&mut Self>, ctx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        match &self.as_mut().state {
-            AddPublicationState::Unstarted {
-                client,
-                uri,
-                stream_id,
-            } => {
+        let self_mut = self.as_mut();
+        match &self_mut.state {
+            AddPublicationState::Unstarted { uri, stream_id } => {
                 let s = CString::new(uri.as_bytes())?;
 
                 let mut add_publication = ptr::null_mut();
                 aeron_result(unsafe {
                     aeron_async_add_publication(
                         &mut add_publication,
-                        client.inner,
+                        self_mut.client.inner,
                         s.as_ptr(),
                         stream_id.0,
                     )
@@ -92,7 +90,7 @@ impl Future for AddPublication {
                 ctx.waker().wake_by_ref();
                 Poll::Pending
             }
-            AddPublicationState::Polling { inner, .. } => {
+            AddPublicationState::Polling { inner } => {
                 let mut publication = ptr::null_mut();
                 match unsafe { aeron_async_add_publication_poll(&mut publication, *inner) } {
                     0 => {
@@ -101,7 +99,10 @@ impl Future for AddPublication {
                     }
                     1 => {
                         debug_assert_ne!(publication, ptr::null_mut());
-                        Poll::Ready(Ok(Publication { inner: publication }))
+                        Poll::Ready(Ok(Publication {
+                            _client: self.client.clone(),
+                            inner: publication,
+                        }))
                     }
                     e => Poll::Ready(Err(Error::FfiError(e))),
                 }
