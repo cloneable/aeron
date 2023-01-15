@@ -18,14 +18,27 @@ pub struct Publication {
 }
 
 impl Publication {
-    pub fn offer(&mut self, data: Vec<u8>) -> Result<Position> {
-        let position = unsafe {
+    fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
+        debug_assert_ne!(inner, ptr::null_mut());
+        Publication {
+            _client: client,
+            inner,
+        }
+    }
+
+    pub fn offer(&mut self, data: &Vec<u8>) -> Result<OfferResult> {
+        let res = unsafe {
             aeron_publication_offer(self.inner, data.as_ptr(), data.len(), None, ptr::null_mut())
         };
-        if position < 0 {
-            aeron_result(position as i32)?;
+        if res >= 0 {
+            return Ok(OfferResult::Ok(Position(res)));
         }
-        Ok(Position(position))
+        match res {
+            -1 => Ok(OfferResult::NotConnected),
+            -2 => Ok(OfferResult::BackPressured),
+            -3 => Ok(OfferResult::AdminAction),
+            _ => Err(aeron_error(res as i32)),
+        }
     }
 }
 
@@ -33,6 +46,13 @@ impl Drop for Publication {
     fn drop(&mut self) {
         aeron_result(unsafe { aeron_publication_close(self.inner, None, ptr::null_mut()) }).ok();
     }
+}
+
+pub enum OfferResult {
+    Ok(Position),
+    BackPressured,
+    NotConnected,
+    AdminAction,
 }
 
 #[must_use = "future must be polled"]
@@ -67,7 +87,7 @@ impl Future for AddPublication {
     type Output = Result<Publication>;
 
     fn poll(mut self: Pin<&mut Self>, ctx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        let self_mut = self.as_mut();
+        let mut self_mut = self.as_mut();
         match &self_mut.state {
             AddPublicationState::Unstarted { uri, stream_id } => {
                 let s = CString::new(uri.as_bytes())?;
@@ -83,7 +103,7 @@ impl Future for AddPublication {
                 })?;
                 debug_assert_ne!(add_publication, ptr::null_mut());
 
-                self.state = AddPublicationState::Polling {
+                self_mut.state = AddPublicationState::Polling {
                     inner: add_publication,
                 };
                 ctx.waker().wake_by_ref();
@@ -98,10 +118,7 @@ impl Future for AddPublication {
                     }
                     1 => {
                         debug_assert_ne!(publication, ptr::null_mut());
-                        Poll::Ready(Ok(Publication {
-                            _client: self.client.clone(),
-                            inner: publication,
-                        }))
+                        Poll::Ready(Ok(Publication::new(self_mut.client.clone(), publication)))
                     }
                     e => Poll::Ready(Err(aeron_error(e))),
                 }
