@@ -56,17 +56,12 @@ unsafe extern "C" fn on_new_publication_handler(
     session_id: i32,
     correlation_id: i64,
 ) {
-    let ch = CString::from_raw(channel as *mut i8)
-        .into_string()
-        .expect("string from cstring");
+    let ch = CStr::from_ptr(channel).to_string_lossy();
     println!("New publication: {ch} stream_id={stream_id} session_id={session_id} correlation_id={correlation_id}");
 }
 
 unsafe extern "C" fn error_handler(_clientd: *mut c_void, code: i32, message: *const i8) {
-    // CStr::from(message).
-    let msg = CString::from_raw(message as *mut i8)
-        .into_string()
-        .expect("string from cstring");
+    let msg = CStr::from_ptr(message).to_string_lossy();
     println!("ERR{code}: {msg}");
 }
 
