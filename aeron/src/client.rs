@@ -2,6 +2,7 @@ use crate::{
     context::Context,
     error::{aeron_result, Result},
     publication::AddPublication,
+    subscription::AddSubscription,
 };
 use aeron_client_sys::{aeron_close, aeron_init, aeron_start, aeron_t};
 use std::{ptr, sync::Arc};
@@ -32,6 +33,14 @@ impl Aeron {
         stream_id: StreamId,
     ) -> Result<AddPublication> {
         AddPublication::new(self, uri, stream_id)
+    }
+
+    pub fn add_subscription(
+        self: Arc<Self>,
+        uri: &String,
+        stream_id: StreamId,
+    ) -> Result<AddSubscription> {
+        AddSubscription::new(self, uri, stream_id)
     }
 }
 
