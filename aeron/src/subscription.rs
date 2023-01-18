@@ -1,7 +1,7 @@
 use crate::{
-    client::{Aeron, StreamId},
+    client::Aeron,
     error::{aeron_error, aeron_result, Result},
-    ChannelStatus, SessionId, TermId,
+    ChannelStatus, SessionId, StreamId, TermId,
 };
 use aeron_client_sys::{
     aeron_async_add_subscription, aeron_async_add_subscription_poll,
@@ -9,9 +9,8 @@ use aeron_client_sys::{
     aeron_controlled_fragment_handler_action_en_AERON_ACTION_ABORT,
     aeron_controlled_fragment_handler_action_en_AERON_ACTION_BREAK,
     aeron_controlled_fragment_handler_action_en_AERON_ACTION_COMMIT,
-    aeron_controlled_fragment_handler_action_en_AERON_ACTION_CONTINUE,
-    aeron_controlled_fragment_handler_t, aeron_header_t, aeron_header_values,
-    aeron_header_values_t, aeron_subscription_async_add_destination,
+    aeron_controlled_fragment_handler_action_en_AERON_ACTION_CONTINUE, aeron_header_t,
+    aeron_header_values, aeron_header_values_t, aeron_subscription_async_add_destination,
     aeron_subscription_async_destination_poll, aeron_subscription_async_remove_destination,
     aeron_subscription_block_poll, aeron_subscription_channel_status, aeron_subscription_close,
     aeron_subscription_controlled_poll, aeron_subscription_is_closed,

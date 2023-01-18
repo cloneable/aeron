@@ -3,15 +3,10 @@ use crate::{
     error::{aeron_result, Result},
     publication::AddPublication,
     subscription::AddSubscription,
+    StreamId,
 };
 use aeron_client_sys::{aeron_close, aeron_init, aeron_start, aeron_t};
 use std::{ptr, sync::Arc};
-
-#[derive(Copy, Clone, Debug)]
-pub struct StreamId(pub i32);
-
-#[derive(Copy, Clone, Debug)]
-pub struct Position(pub i64);
 
 pub struct Aeron {
     pub(crate) inner: *mut aeron_t,

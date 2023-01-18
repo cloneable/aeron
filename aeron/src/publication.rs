@@ -1,6 +1,7 @@
 use crate::{
-    client::{Aeron, Position, StreamId},
+    client::Aeron,
     error::{aeron_error, aeron_result, Result},
+    Position, StreamId,
 };
 use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
