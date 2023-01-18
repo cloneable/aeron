@@ -6,8 +6,10 @@ use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
     aeron_publication_close, aeron_publication_offer, aeron_publication_t,
 };
+use core::ffi;
 use std::{
     ffi::CString,
+    slice,
     {future::Future, pin::Pin, sync::Arc, task::Poll},
     {ptr, task},
 };
@@ -44,6 +46,32 @@ impl Publication {
             _ => Err(aeron_error(res as i32)),
         }
     }
+
+    pub fn offer_with_reserved_value_supplier<'a, F: ReservedValueSupplier<'a>>(
+        &mut self,
+        data: &Vec<u8>,
+        reserved_value_supplier: F,
+    ) -> Result<OfferResult> {
+        let mut closure = reserved_value_supplier;
+        let res = unsafe {
+            aeron_publication_offer(
+                self.inner,
+                data.as_ptr(),
+                data.len(),
+                Some(reserved_value_supplier_closure::<F>),
+                &mut closure as *mut _ as *mut ffi::c_void,
+            )
+        };
+        if res >= 0 {
+            return Ok(OfferResult::Ok(Position(res)));
+        }
+        match res {
+            -1 => Ok(OfferResult::NotConnected),
+            -2 => Ok(OfferResult::BackPressured),
+            -3 => Ok(OfferResult::AdminAction),
+            _ => Err(aeron_error(res as i32)),
+        }
+    }
 }
 
 impl Drop for Publication {
@@ -57,6 +85,20 @@ pub enum OfferResult {
     BackPressured,
     NotConnected,
     AdminAction,
+}
+
+pub trait ReservedValueSupplier<'a>: FnMut(&'a mut [u8]) -> i64 {}
+
+impl<'a, F> ReservedValueSupplier<'a> for F where F: FnMut(&'a mut [u8]) -> i64 {}
+
+unsafe extern "C" fn reserved_value_supplier_closure<'a, F: ReservedValueSupplier<'a>>(
+    clientd: *mut ffi::c_void,
+    buffer: *mut u8,
+    frame_length: usize,
+) -> i64 {
+    let closure = &mut *(clientd as *mut F);
+    let frame = slice::from_raw_parts_mut(buffer, frame_length);
+    closure(frame)
 }
 
 #[must_use = "future must be polled"]
