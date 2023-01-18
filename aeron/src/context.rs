@@ -2,6 +2,7 @@ use crate::error::{aeron_result, Error};
 use aeron_client_sys::{
     aeron_client_registering_resource_stct, aeron_context_close, aeron_context_get_dir,
     aeron_context_init, aeron_context_set_error_handler, aeron_context_set_on_new_publication,
+    aeron_context_t,
 };
 use std::{
     ffi::{c_void, CStr, CString},
@@ -9,7 +10,11 @@ use std::{
 };
 
 pub struct Context {
-    pub(crate) inner: *mut aeron_client_sys::aeron_context_t,
+    pub(crate) inner: *mut aeron_context_t,
+}
+
+unsafe impl Send for Context {
+    // TODO: verify that the C client doesn't use TLS
 }
 
 impl Context {
@@ -67,6 +72,6 @@ unsafe extern "C" fn error_handler(_clientd: *mut c_void, code: i32, message: *c
 
 impl Drop for Context {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_context_close(self.inner) }).ok();
+        aeron_result(unsafe { aeron_context_close(self.inner) }).ok(); // TODO: err
     }
 }

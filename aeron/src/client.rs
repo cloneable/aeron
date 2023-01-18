@@ -18,6 +18,10 @@ pub struct Aeron {
     pub context: Context,
 }
 
+unsafe impl Send for Aeron {
+    // TODO: verify that the C client doesn't use TLS
+}
+
 impl Aeron {
     pub fn connect(context: Context) -> Result<Arc<Self>> {
         let mut inner = ptr::null_mut();
@@ -46,6 +50,6 @@ impl Aeron {
 
 impl Drop for Aeron {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_close(self.inner) }).ok();
+        aeron_result(unsafe { aeron_close(self.inner) }).ok(); // TODO: err
     }
 }

@@ -17,6 +17,10 @@ pub struct Publication {
     inner: *mut aeron_publication_t,
 }
 
+unsafe impl Send for Publication {
+    // TODO: verify that the C client doesn't use TLS
+}
+
 impl Publication {
     fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
         debug_assert_ne!(inner, ptr::null_mut());
