@@ -59,7 +59,7 @@ impl Publication {
                 self.inner,
                 data.as_ptr(),
                 data.len(),
-                Some(reserved_value_supplier_closure::<F>),
+                Some(reserved_value_supplier_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
         };
@@ -92,7 +92,7 @@ pub trait ReservedValueSupplier<'a>: FnMut(&'a mut [u8]) -> i64 {}
 
 impl<'a, F> ReservedValueSupplier<'a> for F where F: FnMut(&'a mut [u8]) -> i64 {}
 
-unsafe extern "C" fn reserved_value_supplier_closure<'a, F: ReservedValueSupplier<'a>>(
+unsafe extern "C" fn reserved_value_supplier_trampoline<'a, F: ReservedValueSupplier<'a>>(
     clientd: *mut ffi::c_void,
     buffer: *mut u8,
     frame_length: usize,

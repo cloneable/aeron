@@ -95,7 +95,7 @@ impl Subscription {
         unsafe {
             aeron_subscription_poll(
                 self.inner,
-                Some(fragment_handler_closure::<F>),
+                Some(fragment_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 fragment_limit,
             )
@@ -111,7 +111,7 @@ impl Subscription {
         unsafe {
             aeron_subscription_controlled_poll(
                 self.inner,
-                Some(controlled_fragment_handler_closure::<F>),
+                Some(controlled_fragment_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 fragment_limit,
             )
@@ -123,7 +123,7 @@ impl Subscription {
         unsafe {
             aeron_subscription_block_poll(
                 self.inner,
-                Some(block_handler_closure::<F>),
+                Some(block_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 block_length_limit,
             )
@@ -158,7 +158,7 @@ pub trait FragmentHandler<'a>: FnMut(&'a [u8], aeron_header_values_t) {}
 
 impl<'a, F> FragmentHandler<'a> for F where F: FnMut(&'a [u8], aeron_header_values_t) {}
 
-unsafe extern "C" fn fragment_handler_closure<'a, F: FragmentHandler<'a>>(
+unsafe extern "C" fn fragment_handler_trampoline<'a, F: FragmentHandler<'a>>(
     clientd: *mut ffi::c_void,
     fragment: *const u8,
     fragment_length: usize,
@@ -190,7 +190,10 @@ impl<'a, F> ControlledFragmentHandler<'a> for F where
 {
 }
 
-unsafe extern "C" fn controlled_fragment_handler_closure<'a, F: ControlledFragmentHandler<'a>>(
+unsafe extern "C" fn controlled_fragment_handler_trampoline<
+    'a,
+    F: ControlledFragmentHandler<'a>,
+>(
     clientd: *mut ffi::c_void,
     buffer: *const u8,
     length: usize,
@@ -207,7 +210,7 @@ pub trait BlockHandler<'a>: FnMut(&'a [u8], SessionId, TermId) {}
 
 impl<'a, F> BlockHandler<'a> for F where F: FnMut(&'a [u8], SessionId, TermId) {}
 
-unsafe extern "C" fn block_handler_closure<'a, F: BlockHandler<'a>>(
+unsafe extern "C" fn block_handler_trampoline<'a, F: BlockHandler<'a>>(
     clientd: *mut ffi::c_void,
     buffer: *const u8,
     length: usize,

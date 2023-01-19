@@ -34,7 +34,7 @@ impl Context {
         unsafe {
             aeron_context_set_error_handler(
                 self.inner,
-                Some(error_handler_wrapper::<F>),
+                Some(error_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
         };
@@ -45,7 +45,7 @@ impl Context {
         unsafe {
             aeron_context_set_on_new_publication(
                 self.inner,
-                Some(on_new_publication_handler::<F>),
+                Some(on_new_publication_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
         };
@@ -74,7 +74,7 @@ pub trait ErrorHandler<'a>: FnMut(i32, &'a str) {}
 
 impl<'a, F> ErrorHandler<'a> for F where F: FnMut(i32, &'a str) {}
 
-unsafe extern "C" fn error_handler_wrapper<'a, F: ErrorHandler<'a>>(
+unsafe extern "C" fn error_handler_trampoline<'a, F: ErrorHandler<'a>>(
     clientd: *mut c_void,
     code: i32,
     _message: *const i8,
@@ -89,7 +89,7 @@ pub trait OnNewPublication: FnMut(StreamId, SessionId, CorrelationId) {}
 
 impl<F> OnNewPublication for F where F: FnMut(StreamId, SessionId, CorrelationId) {}
 
-unsafe extern "C" fn on_new_publication_handler<F: OnNewPublication>(
+unsafe extern "C" fn on_new_publication_trampoline<F: OnNewPublication>(
     clientd: *mut c_void,
     _handle: *mut aeron_client_registering_resource_stct,
     _channel: *const i8,
