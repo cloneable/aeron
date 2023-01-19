@@ -26,14 +26,18 @@ impl Context {
         let mut inner = core::ptr::null_mut();
         aeron_result(unsafe { aeron_context_init(&mut inner) })?;
         debug_assert_ne!(inner, ptr::null_mut());
+        Ok(Context { inner })
+    }
 
-        let ctx = Context { inner };
-
-        aeron_result(unsafe {
-            aeron_context_set_error_handler(ctx.inner, Some(error_handler), ptr::null_mut())
-        })?;
-
-        Ok(ctx)
+    pub fn set_error_handler<'a, F: ErrorHandler<'a>>(&self, error_handler: F) {
+        let mut closure = error_handler;
+        unsafe {
+            aeron_context_set_error_handler(
+                self.inner,
+                Some(error_handler_wrapper::<F>),
+                &mut closure as *mut _ as *mut ffi::c_void,
+            )
+        };
     }
 
     pub fn set_on_new_publication<F: OnNewPublication>(&self, on_new_publication: F) {
@@ -60,15 +64,25 @@ impl Context {
     }
 }
 
-unsafe extern "C" fn error_handler(_clientd: *mut c_void, code: i32, message: *const i8) {
-    let msg = CStr::from_ptr(message).to_string_lossy();
-    println!("ERR{code}: {msg}");
-}
-
 impl Drop for Context {
     fn drop(&mut self) {
         aeron_result(unsafe { aeron_context_close(self.inner) }).ok(); // TODO: err
     }
+}
+
+pub trait ErrorHandler<'a>: FnMut(i32, &'a str) {}
+
+impl<'a, F> ErrorHandler<'a> for F where F: FnMut(i32, &'a str) {}
+
+unsafe extern "C" fn error_handler_wrapper<'a, F: ErrorHandler<'a>>(
+    clientd: *mut c_void,
+    code: i32,
+    _message: *const i8,
+) {
+    // let cmsg = CStr::from_ptr(message);
+    // let msg = String::from_utf8_lossy(cmsg.to_bytes()).to_string();
+    let closure = &mut *(clientd as *mut F);
+    closure(code, "") // TODO: err msg
 }
 
 pub trait OnNewPublication: FnMut(StreamId, SessionId, CorrelationId) {}

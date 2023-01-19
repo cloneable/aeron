@@ -9,6 +9,10 @@ const DEFAULT_STREAM_ID: StreamId = StreamId(1001);
 pub async fn main() -> color_eyre::Result<()> {
     let ctx = Context::new()?;
 
+    ctx.set_error_handler(|code, msg| {
+        println!("ERR{code}: {msg}");
+    });
+
     ctx.set_on_new_publication(|stream_id, session_id, correlation_id| {
         // let ch = CStr::from_ptr(channel).to_string_lossy();
         println!("New publication: stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
