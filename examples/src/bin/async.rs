@@ -1,6 +1,8 @@
-use aeron::{client::Aeron, context::Context, publication::OfferResult, StreamId};
-use aeron_client_sys::aeron_header_values_t;
-use std::time::Duration;
+use aeron::{client::Aeron, context::Context, publication::OfferResult, Header, StreamId};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 const DEFAULT_CHANNEL: &str = "aeron:udp?endpoint=localhost:20121";
 const DEFAULT_STREAM_ID: StreamId = StreamId(1001);
@@ -14,21 +16,17 @@ pub async fn main() -> color_eyre::Result<()> {
     });
 
     ctx.set_on_new_publication(|stream_id, session_id, correlation_id| {
-        // let ch = CStr::from_ptr(channel).to_string_lossy();
         println!("New publication: stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
     });
 
     ctx.set_on_new_subscription(|stream_id, correlation_id| {
-        // let ch = CStr::from_ptr(channel).to_string_lossy();
         println!("New subscription: stream_id={stream_id:?} correlation_id={correlation_id:?}");
     });
 
     let client = Aeron::connect(ctx)?;
 
-    let mut publication = client
-        .clone()
-        .add_publication(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)?
-        .await?;
+    let mut publication =
+        client.clone().add_publication(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)?.await?;
 
     let subscription = client
         .add_subscription(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)
@@ -36,24 +34,28 @@ pub async fn main() -> color_eyre::Result<()> {
         .await
         .unwrap();
 
-    tokio::spawn(async move {
-        let handler = |data: &[u8], header: aeron_header_values_t| {
+    let handle = tokio::spawn(async move {
+        let stop = AtomicBool::new(false);
+        let handler = |data: &[u8], header: Header| {
             let text = String::from_utf8_lossy(data);
             println!(
-                "Message from session {sess_id} ({len} bytes) <<{text}>>",
-                sess_id = header.frame.session_id,
+                "Message from session {sess_id:?} ({len} bytes) <<{text}>>",
+                sess_id = header.session_id(),
                 len = data.len(),
             );
+            if text == "stop" {
+                stop.store(true, Ordering::Release);
+            }
         };
 
-        loop {
-            subscription.poll(handler, 100);
+        while !stop.load(Ordering::Acquire) {
+            subscription.poll(handler, 1);
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     });
 
     let buf = vec![42u8];
-    loop {
+    for _ in 0..10 {
         match publication.offer(&buf)? {
             OfferResult::Ok(position) => {
                 println!("SENT {position:?}");
@@ -70,4 +72,16 @@ pub async fn main() -> color_eyre::Result<()> {
         };
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
+
+    let (mut buf, _) = publication.try_claim(26)?;
+    for i in 0..buf.data().len() {
+        buf.data()[i] = b'a' + i as u8;
+    }
+    buf.commit()?;
+
+    publication.offer(&Vec::from("stop".as_bytes()))?;
+
+    handle.await?;
+
+    Ok(())
 }
