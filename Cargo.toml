@@ -1,5 +1,5 @@
 [workspace]
-members = ["aeron", "aeron-client-sys", "examples"]
+members = ["aeron", "aeron-client-sys", "aeron-examples"]
 default-members = ["aeron"]
 
 # Test with optimizations

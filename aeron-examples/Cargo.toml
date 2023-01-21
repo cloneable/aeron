@@ -1,11 +1,9 @@
 [package]
-name = "examples"
+name = "aeron-examples"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 aeron = { path = "../aeron" }
-aeron-client-sys = { path = "../aeron-client-sys" }
 color-eyre = "0.6"
-thiserror = "1"
 tokio = { version = "1", features = ["full"] }
