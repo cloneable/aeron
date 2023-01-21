@@ -5,7 +5,7 @@ use crate::{
 use aeron_client_sys::{
     aeron_client_registering_resource_stct, aeron_context_close, aeron_context_get_dir,
     aeron_context_init, aeron_context_set_error_handler, aeron_context_set_on_new_publication,
-    aeron_context_t,
+    aeron_context_set_on_new_subscription, aeron_context_t,
 };
 use std::{
     ffi,
@@ -46,6 +46,17 @@ impl Context {
             aeron_context_set_on_new_publication(
                 self.inner,
                 Some(on_new_publication_trampoline::<F>),
+                &mut closure as *mut _ as *mut ffi::c_void,
+            )
+        };
+    }
+
+    pub fn set_on_new_subscription<F: OnNewSubscription>(&self, on_new_subscription: F) {
+        let mut closure = on_new_subscription;
+        unsafe {
+            aeron_context_set_on_new_subscription(
+                self.inner,
+                Some(on_new_subscription_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
         };
@@ -103,4 +114,19 @@ unsafe extern "C" fn on_new_publication_trampoline<F: OnNewPublication>(
         SessionId(session_id),
         CorrelationId(correlation_id),
     );
+}
+
+pub trait OnNewSubscription: FnMut(StreamId, CorrelationId) {}
+
+impl<F> OnNewSubscription for F where F: FnMut(StreamId, CorrelationId) {}
+
+unsafe extern "C" fn on_new_subscription_trampoline<F: OnNewSubscription>(
+    clientd: *mut c_void,
+    _handle: *mut aeron_client_registering_resource_stct,
+    _channel: *const i8,
+    stream_id: i32,
+    correlation_id: i64,
+) {
+    let closure = &mut *(clientd as *mut F);
+    closure(StreamId(stream_id), CorrelationId(correlation_id));
 }

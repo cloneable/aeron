@@ -18,6 +18,11 @@ pub async fn main() -> color_eyre::Result<()> {
         println!("New publication: stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
     });
 
+    ctx.set_on_new_subscription(|stream_id, correlation_id| {
+        // let ch = CStr::from_ptr(channel).to_string_lossy();
+        println!("New subscription: stream_id={stream_id:?} correlation_id={correlation_id:?}");
+    });
+
     let client = Aeron::connect(ctx)?;
 
     let mut publication = client
