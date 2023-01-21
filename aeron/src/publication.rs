@@ -22,10 +22,7 @@ pub struct Publication {
 
 impl Publication {
     fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
-        Publication {
-            _client: client,
-            inner: inner.into(),
-        }
+        Publication { _client: client, inner: inner.into() }
     }
 
     pub fn offer(&mut self, data: &Vec<u8>) -> Result<OfferResult> {
@@ -113,23 +110,15 @@ pub struct AddPublication {
 }
 
 enum AddPublicationState {
-    Unstarted {
-        uri: String,
-        stream_id: StreamId,
-    },
-    Polling {
-        inner: SendSyncPtr<aeron_async_add_publication_t>,
-    },
+    Unstarted { uri: String, stream_id: StreamId },
+    Polling { inner: SendSyncPtr<aeron_async_add_publication_t> },
 }
 
 impl AddPublication {
     pub(crate) fn new(client: Arc<Aeron>, uri: &String, stream_id: StreamId) -> Result<Self> {
         Ok(AddPublication {
             client,
-            state: AddPublicationState::Unstarted {
-                uri: uri.clone(),
-                stream_id,
-            },
+            state: AddPublicationState::Unstarted { uri: uri.clone(), stream_id },
         })
     }
 }
@@ -154,9 +143,7 @@ impl Future for AddPublication {
                 })?;
                 debug_assert_ne!(inner, ptr::null_mut());
 
-                self_mut.state = AddPublicationState::Polling {
-                    inner: inner.into(),
-                };
+                self_mut.state = AddPublicationState::Polling { inner: inner.into() };
                 ctx.waker().wake_by_ref();
                 Poll::Pending
             }

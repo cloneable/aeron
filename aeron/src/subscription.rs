@@ -32,10 +32,7 @@ pub struct Subscription {
 
 impl Subscription {
     fn new(client: Arc<Aeron>, inner: *mut aeron_subscription_t) -> Self {
-        Subscription {
-            client,
-            inner: inner.into(),
-        }
+        Subscription { client, inner: inner.into() }
     }
 
     pub fn add_destination(self: &Arc<Subscription>, uri: &str) -> Result<AsyncDestination> {
@@ -49,10 +46,7 @@ impl Subscription {
                 uri.as_ptr(),
             )
         })?;
-        Ok(AsyncDestination {
-            _subscription: self.clone(),
-            inner: inner.into(),
-        })
+        Ok(AsyncDestination { _subscription: self.clone(), inner: inner.into() })
     }
 
     pub fn remove_destination(self: &Arc<Subscription>, uri: &str) -> Result<AsyncDestination> {
@@ -66,10 +60,7 @@ impl Subscription {
                 uri.as_ptr(),
             )
         })?;
-        Ok(AsyncDestination {
-            _subscription: self.clone(),
-            inner: inner.into(),
-        })
+        Ok(AsyncDestination { _subscription: self.clone(), inner: inner.into() })
     }
 
     pub fn channel_status(&self) -> ChannelStatus {
@@ -230,23 +221,15 @@ pub struct AddSubscription {
 }
 
 enum AddSubscriptionState {
-    Unstarted {
-        uri: String,
-        stream_id: StreamId,
-    },
-    Polling {
-        inner: SendSyncPtr<aeron_async_add_subscription_t>,
-    },
+    Unstarted { uri: String, stream_id: StreamId },
+    Polling { inner: SendSyncPtr<aeron_async_add_subscription_t> },
 }
 
 impl AddSubscription {
     pub(crate) fn new(client: Arc<Aeron>, uri: &String, stream_id: StreamId) -> Result<Self> {
         Ok(AddSubscription {
             client,
-            state: AddSubscriptionState::Unstarted {
-                uri: uri.clone(),
-                stream_id,
-            },
+            state: AddSubscriptionState::Unstarted { uri: uri.clone(), stream_id },
         })
     }
 }
@@ -273,9 +256,7 @@ impl Future for AddSubscription {
                         ptr::null_mut(),
                     )
                 })?;
-                self_mut.state = AddSubscriptionState::Polling {
-                    inner: inner.into(),
-                };
+                self_mut.state = AddSubscriptionState::Polling { inner: inner.into() };
                 ctx.waker().wake_by_ref();
                 Poll::Pending
             }

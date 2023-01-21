@@ -18,10 +18,7 @@ impl Aeron {
         let mut inner = ptr::null_mut();
         aeron_result(unsafe { aeron_init(&mut inner, context.inner.as_ptr()) })?;
         aeron_result(unsafe { aeron_start(inner) })?;
-        Ok(Arc::new(Aeron {
-            context,
-            inner: inner.into(),
-        }))
+        Ok(Arc::new(Aeron { context, inner: inner.into() }))
     }
 
     pub fn add_publication(

@@ -22,9 +22,7 @@ impl Context {
         let mut inner = core::ptr::null_mut();
         aeron_result(unsafe { aeron_context_init(&mut inner) })?;
         debug_assert_ne!(inner, ptr::null_mut());
-        Ok(Context {
-            inner: inner.into(),
-        })
+        Ok(Context { inner: inner.into() })
     }
 
     pub fn set_error_handler<'a, F: ErrorHandler<'a>>(&self, error_handler: F) {
@@ -107,11 +105,7 @@ unsafe extern "C" fn on_new_publication_trampoline<F: OnNewPublication>(
     correlation_id: i64,
 ) {
     let closure = &mut *(clientd as *mut F);
-    closure(
-        StreamId(stream_id),
-        SessionId(session_id),
-        CorrelationId(correlation_id),
-    );
+    closure(StreamId(stream_id), SessionId(session_id), CorrelationId(correlation_id));
 }
 
 pub trait OnNewSubscription: FnMut(StreamId, CorrelationId) {}
