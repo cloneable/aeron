@@ -1,7 +1,7 @@
 use crate::{
     client::Aeron,
     error::{aeron_error, aeron_result, Result},
-    ChannelStatus, SendSyncPtr, SessionId, StreamId, TermId,
+    ChannelStatus, Header, SendSyncPtr, SessionId, StreamId, TermId,
 };
 use aeron_client_sys::{
     aeron_async_add_subscription, aeron_async_add_subscription_poll,
@@ -146,9 +146,9 @@ impl AsyncDestination {
     }
 }
 
-pub trait FragmentHandler<'a>: FnMut(&'a [u8], aeron_header_values_t) {}
+pub trait FragmentHandler<'a>: FnMut(&'a [u8], Header) {}
 
-impl<'a, F> FragmentHandler<'a> for F where F: FnMut(&'a [u8], aeron_header_values_t) {}
+impl<'a, F> FragmentHandler<'a> for F where F: FnMut(&'a [u8], Header) {}
 
 unsafe extern "C" fn fragment_handler_trampoline<'a, F: FragmentHandler<'a>>(
     clientd: *mut ffi::c_void,
@@ -160,7 +160,7 @@ unsafe extern "C" fn fragment_handler_trampoline<'a, F: FragmentHandler<'a>>(
     aeron_header_values(header, values.as_mut_ptr()); // TODO: err
     let closure = &mut *(clientd as *mut F);
     let fragment = slice::from_raw_parts(fragment, fragment_length);
-    closure(fragment, values.assume_init());
+    closure(fragment, Header(values.assume_init()));
 }
 
 #[repr(u32)]
