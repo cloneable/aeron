@@ -1,7 +1,7 @@
 use crate::{
     client::Aeron,
     error::{aeron_error, aeron_result, Result},
-    Position, StreamId,
+    Position, SendSyncPtr, StreamId,
 };
 use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
@@ -17,25 +17,26 @@ use std::{
 
 pub struct Publication {
     _client: Arc<Aeron>,
-    inner: *mut aeron_publication_t,
-}
-
-unsafe impl Send for Publication {
-    // TODO: verify that the C client doesn't use TLS
+    inner: SendSyncPtr<aeron_publication_t>,
 }
 
 impl Publication {
     fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
-        debug_assert_ne!(inner, ptr::null_mut());
         Publication {
             _client: client,
-            inner,
+            inner: inner.into(),
         }
     }
 
     pub fn offer(&mut self, data: &Vec<u8>) -> Result<OfferResult> {
         let res = unsafe {
-            aeron_publication_offer(self.inner, data.as_ptr(), data.len(), None, ptr::null_mut())
+            aeron_publication_offer(
+                self.inner.as_ptr(),
+                data.as_ptr(),
+                data.len(),
+                None,
+                ptr::null_mut(),
+            )
         };
         if res >= 0 {
             return Ok(OfferResult::Ok(Position(res)));
@@ -56,7 +57,7 @@ impl Publication {
         let mut closure = reserved_value_supplier;
         let res = unsafe {
             aeron_publication_offer(
-                self.inner,
+                self.inner.as_ptr(),
                 data.as_ptr(),
                 data.len(),
                 Some(reserved_value_supplier_trampoline::<F>),
@@ -77,7 +78,10 @@ impl Publication {
 
 impl Drop for Publication {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_publication_close(self.inner, None, ptr::null_mut()) }).ok();
+        aeron_result(unsafe {
+            aeron_publication_close(self.inner.as_ptr(), None, ptr::null_mut())
+        })
+        .ok();
     }
 }
 
@@ -114,7 +118,7 @@ enum AddPublicationState {
         stream_id: StreamId,
     },
     Polling {
-        inner: *mut aeron_async_add_publication_t,
+        inner: SendSyncPtr<aeron_async_add_publication_t>,
     },
 }
 
@@ -139,26 +143,27 @@ impl Future for AddPublication {
             AddPublicationState::Unstarted { uri, stream_id } => {
                 let s = CString::new(uri.as_bytes())?;
 
-                let mut add_publication = ptr::null_mut();
+                let mut inner = ptr::null_mut();
                 aeron_result(unsafe {
                     aeron_async_add_publication(
-                        &mut add_publication,
-                        self_mut.client.inner,
+                        &mut inner,
+                        self_mut.client.inner.as_ptr(),
                         s.as_ptr(),
                         stream_id.0,
                     )
                 })?;
-                debug_assert_ne!(add_publication, ptr::null_mut());
+                debug_assert_ne!(inner, ptr::null_mut());
 
                 self_mut.state = AddPublicationState::Polling {
-                    inner: add_publication,
+                    inner: inner.into(),
                 };
                 ctx.waker().wake_by_ref();
                 Poll::Pending
             }
             AddPublicationState::Polling { inner } => {
                 let mut publication = ptr::null_mut();
-                match unsafe { aeron_async_add_publication_poll(&mut publication, *inner) } {
+                match unsafe { aeron_async_add_publication_poll(&mut publication, inner.as_ptr()) }
+                {
                     0 => {
                         ctx.waker().wake_by_ref();
                         Poll::Pending

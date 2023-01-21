@@ -1,7 +1,7 @@
 use crate::{
     client::Aeron,
     error::{aeron_error, aeron_result, Result},
-    ChannelStatus, SessionId, StreamId, TermId,
+    ChannelStatus, SendSyncPtr, SessionId, StreamId, TermId,
 };
 use aeron_client_sys::{
     aeron_async_add_subscription, aeron_async_add_subscription_poll,
@@ -27,17 +27,15 @@ use std::{
 
 pub struct Subscription {
     client: Arc<Aeron>,
-    inner: *mut aeron_subscription_t,
-}
-
-unsafe impl Send for Subscription {
-    // TODO: verify that the C client doesn't use TLS
+    inner: SendSyncPtr<aeron_subscription_t>,
 }
 
 impl Subscription {
     fn new(client: Arc<Aeron>, inner: *mut aeron_subscription_t) -> Self {
-        debug_assert_ne!(inner, ptr::null_mut());
-        Subscription { client, inner }
+        Subscription {
+            client,
+            inner: inner.into(),
+        }
     }
 
     pub fn add_destination(self: &Arc<Subscription>, uri: &str) -> Result<AsyncDestination> {
@@ -46,14 +44,14 @@ impl Subscription {
         aeron_result(unsafe {
             aeron_subscription_async_add_destination(
                 &mut inner,
-                self.client.inner,
-                self.inner,
+                self.client.inner.as_ptr(),
+                self.inner.as_ptr(),
                 uri.as_ptr(),
             )
         })?;
         Ok(AsyncDestination {
             _subscription: self.clone(),
-            inner,
+            inner: inner.into(),
         })
     }
 
@@ -63,19 +61,19 @@ impl Subscription {
         aeron_result(unsafe {
             aeron_subscription_async_remove_destination(
                 &mut inner,
-                self.client.inner,
-                self.inner,
+                self.client.inner.as_ptr(),
+                self.inner.as_ptr(),
                 uri.as_ptr(),
             )
         })?;
         Ok(AsyncDestination {
             _subscription: self.clone(),
-            inner,
+            inner: inner.into(),
         })
     }
 
     pub fn channel_status(&self) -> ChannelStatus {
-        match unsafe { aeron_subscription_channel_status(self.inner) } {
+        match unsafe { aeron_subscription_channel_status(self.inner.as_ptr()) } {
             1 => ChannelStatus::Active,
             -1 => ChannelStatus::Errored,
             v => ChannelStatus::Other(v),
@@ -83,18 +81,18 @@ impl Subscription {
     }
 
     pub fn is_connected(&self) -> bool {
-        unsafe { aeron_subscription_is_connected(self.inner) }
+        unsafe { aeron_subscription_is_connected(self.inner.as_ptr()) }
     }
 
     pub fn is_closed(&self) -> bool {
-        unsafe { aeron_subscription_is_closed(self.inner) }
+        unsafe { aeron_subscription_is_closed(self.inner.as_ptr()) }
     }
 
     pub fn poll<'a, F: FragmentHandler<'a>>(&self, handler: F, fragment_limit: usize) {
         let mut closure = handler;
         unsafe {
             aeron_subscription_poll(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(fragment_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 fragment_limit,
@@ -110,7 +108,7 @@ impl Subscription {
         let mut closure = handler;
         unsafe {
             aeron_subscription_controlled_poll(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(controlled_fragment_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 fragment_limit,
@@ -122,7 +120,7 @@ impl Subscription {
         let mut closure = handler;
         unsafe {
             aeron_subscription_block_poll(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(block_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
                 block_length_limit,
@@ -133,19 +131,22 @@ impl Subscription {
 
 impl Drop for Subscription {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_subscription_close(self.inner, None, ptr::null_mut()) }).ok();
+        aeron_result(unsafe {
+            aeron_subscription_close(self.inner.as_ptr(), None, ptr::null_mut())
+        })
+        .ok();
         // TODO: err
     }
 }
 
 pub struct AsyncDestination {
     _subscription: Arc<Subscription>,
-    inner: *mut aeron_async_destination_t,
+    inner: SendSyncPtr<aeron_async_destination_t>,
 }
 
 impl AsyncDestination {
     pub fn poll(&self) -> Result<bool> {
-        let res = unsafe { aeron_subscription_async_destination_poll(self.inner) };
+        let res = unsafe { aeron_subscription_async_destination_poll(self.inner.as_ptr()) };
         if res >= 0 {
             Ok(res != 0)
         } else {
@@ -234,7 +235,7 @@ enum AddSubscriptionState {
         stream_id: StreamId,
     },
     Polling {
-        inner: *mut aeron_async_add_subscription_t,
+        inner: SendSyncPtr<aeron_async_add_subscription_t>,
     },
 }
 
@@ -259,11 +260,11 @@ impl Future for AddSubscription {
             AddSubscriptionState::Unstarted { uri, stream_id } => {
                 let s = CString::new(uri.as_bytes())?;
 
-                let mut add_subscription = ptr::null_mut();
+                let mut inner = ptr::null_mut();
                 aeron_result(unsafe {
                     aeron_async_add_subscription(
-                        &mut add_subscription,
-                        self_mut.client.inner,
+                        &mut inner,
+                        self_mut.client.inner.as_ptr(),
                         s.as_ptr(),
                         stream_id.0,
                         None, // TODO: on_available_image_handler
@@ -272,17 +273,17 @@ impl Future for AddSubscription {
                         ptr::null_mut(),
                     )
                 })?;
-                debug_assert_ne!(add_subscription, ptr::null_mut());
-
                 self_mut.state = AddSubscriptionState::Polling {
-                    inner: add_subscription,
+                    inner: inner.into(),
                 };
                 ctx.waker().wake_by_ref();
                 Poll::Pending
             }
             AddSubscriptionState::Polling { inner } => {
                 let mut subscription = ptr::null_mut();
-                match unsafe { aeron_async_add_subscription_poll(&mut subscription, *inner) } {
+                match unsafe {
+                    aeron_async_add_subscription_poll(&mut subscription, inner.as_ptr())
+                } {
                     0 => {
                         ctx.waker().wake_by_ref();
                         Poll::Pending

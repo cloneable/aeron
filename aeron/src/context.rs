@@ -1,6 +1,6 @@
 use crate::{
     error::{aeron_result, Error},
-    CorrelationId, SessionId, StreamId,
+    CorrelationId, SendSyncPtr, SessionId, StreamId,
 };
 use aeron_client_sys::{
     aeron_client_registering_resource_stct, aeron_context_close, aeron_context_get_dir,
@@ -14,11 +14,7 @@ use std::{
 };
 
 pub struct Context {
-    pub(crate) inner: *mut aeron_context_t,
-}
-
-unsafe impl Send for Context {
-    // TODO: verify that the C client doesn't use TLS
+    pub(crate) inner: SendSyncPtr<aeron_context_t>,
 }
 
 impl Context {
@@ -26,14 +22,16 @@ impl Context {
         let mut inner = core::ptr::null_mut();
         aeron_result(unsafe { aeron_context_init(&mut inner) })?;
         debug_assert_ne!(inner, ptr::null_mut());
-        Ok(Context { inner })
+        Ok(Context {
+            inner: inner.into(),
+        })
     }
 
     pub fn set_error_handler<'a, F: ErrorHandler<'a>>(&self, error_handler: F) {
         let mut closure = error_handler;
         unsafe {
             aeron_context_set_error_handler(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(error_handler_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
@@ -44,7 +42,7 @@ impl Context {
         let mut closure = on_new_publication;
         unsafe {
             aeron_context_set_on_new_publication(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(on_new_publication_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
@@ -55,7 +53,7 @@ impl Context {
         let mut closure = on_new_subscription;
         unsafe {
             aeron_context_set_on_new_subscription(
-                self.inner,
+                self.inner.as_ptr(),
                 Some(on_new_subscription_trampoline::<F>),
                 &mut closure as *mut _ as *mut ffi::c_void,
             )
@@ -63,7 +61,7 @@ impl Context {
     }
 
     pub fn get_dir(&self) -> String {
-        let dir = unsafe { aeron_context_get_dir(self.inner) };
+        let dir = unsafe { aeron_context_get_dir(self.inner.as_ptr()) };
         if dir != ptr::null() {
             unsafe {
                 let cs = CStr::from_ptr(dir as *mut i8);
@@ -77,7 +75,7 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_context_close(self.inner) }).ok(); // TODO: err
+        aeron_result(unsafe { aeron_context_close(self.inner.as_ptr()) }).ok(); // TODO: err
     }
 }
 
