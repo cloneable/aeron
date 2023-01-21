@@ -5,11 +5,14 @@ use crate::{
 };
 use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
+    aeron_buffer_claim_abort, aeron_buffer_claim_commit, aeron_buffer_claim_stct,
     aeron_publication_close, aeron_publication_offer, aeron_publication_t,
+    aeron_publication_try_claim,
 };
 use core::ffi;
 use std::{
     ffi::CString,
+    mem::MaybeUninit,
     slice,
     {future::Future, pin::Pin, sync::Arc, task::Poll},
     {ptr, task},
@@ -71,6 +74,18 @@ impl Publication {
             _ => Err(aeron_error(res as i32)),
         }
     }
+
+    pub fn try_claim(&self, length: usize) -> Result<(BufferClaim, Position)> {
+        let mut buffer_claim: MaybeUninit<aeron_buffer_claim_stct> = MaybeUninit::uninit();
+        let ret = unsafe {
+            aeron_publication_try_claim(self.inner.as_ptr(), length, buffer_claim.as_mut_ptr())
+        };
+        if ret >= 0 {
+            Ok((BufferClaim { inner: unsafe { buffer_claim.assume_init() } }, Position(ret)))
+        } else {
+            Err(aeron_error(ret as i32))
+        }
+    }
 }
 
 impl Drop for Publication {
@@ -87,6 +102,24 @@ pub enum OfferResult {
     BackPressured,
     NotConnected,
     AdminAction,
+}
+
+pub struct BufferClaim {
+    inner: aeron_buffer_claim_stct,
+}
+
+impl BufferClaim {
+    pub fn data(&mut self) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.inner.data, self.inner.length) }
+    }
+
+    pub fn commit(mut self) -> Result<()> {
+        aeron_result(unsafe { aeron_buffer_claim_commit(&mut self.inner) })
+    }
+
+    pub fn abort(mut self) -> Result<()> {
+        aeron_result(unsafe { aeron_buffer_claim_abort(&mut self.inner) })
+    }
 }
 
 pub trait ReservedValueSupplier<'a>: FnMut(&'a mut [u8]) -> i64 {}
