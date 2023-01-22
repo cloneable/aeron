@@ -1,12 +1,15 @@
 use crate::{
     client::Aeron,
     error::{aeron_error, aeron_result, Result},
-    Position, SendSyncPtr, StreamId,
+    ChannelStatus, Position, SendSyncPtr, StreamId,
 };
 use aeron_client_sys::{
     aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
-    aeron_buffer_claim_abort, aeron_buffer_claim_commit, aeron_buffer_claim_stct,
-    aeron_publication_close, aeron_publication_offer, aeron_publication_t,
+    aeron_async_destination_t, aeron_buffer_claim_abort, aeron_buffer_claim_commit,
+    aeron_buffer_claim_stct, aeron_publication_async_add_destination,
+    aeron_publication_async_destination_poll, aeron_publication_async_remove_destination,
+    aeron_publication_channel_status, aeron_publication_close, aeron_publication_is_closed,
+    aeron_publication_is_connected, aeron_publication_offer, aeron_publication_t,
     aeron_publication_try_claim,
 };
 use core::ffi;
@@ -19,13 +22,29 @@ use std::{
 };
 
 pub struct Publication {
-    _client: Arc<Aeron>,
+    client: Arc<Aeron>,
     inner: SendSyncPtr<aeron_publication_t>,
 }
 
 impl Publication {
     fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
-        Publication { _client: client, inner: inner.into() }
+        Publication { client, inner: inner.into() }
+    }
+
+    pub fn channel_status(&self) -> ChannelStatus {
+        match unsafe { aeron_publication_channel_status(self.inner.as_ptr()) } {
+            1 => ChannelStatus::Active,
+            -1 => ChannelStatus::Errored,
+            v => ChannelStatus::Other(v),
+        }
+    }
+
+    pub fn is_connected(&self) -> bool {
+        unsafe { aeron_publication_is_connected(self.inner.as_ptr()) }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        unsafe { aeron_publication_is_closed(self.inner.as_ptr()) }
     }
 
     pub fn offer(&mut self, data: &Vec<u8>) -> Result<OfferResult> {
@@ -88,6 +107,34 @@ impl Publication {
         } else {
             Err(aeron_error(ret as i32))
         }
+    }
+
+    pub fn add_destination(self: &Arc<Publication>, uri: &str) -> Result<AsyncDestination> {
+        let uri = CString::new(uri.as_bytes())?;
+        let mut inner = ptr::null_mut();
+        aeron_result(unsafe {
+            aeron_publication_async_add_destination(
+                &mut inner,
+                self.client.inner.as_ptr(),
+                self.inner.as_ptr(),
+                uri.as_ptr(),
+            )
+        })?;
+        Ok(AsyncDestination { _publication: self.clone(), inner: inner.into() })
+    }
+
+    pub fn remove_destination(self: &Arc<Publication>, uri: &str) -> Result<AsyncDestination> {
+        let uri = CString::new(uri.as_bytes())?;
+        let mut inner = ptr::null_mut();
+        aeron_result(unsafe {
+            aeron_publication_async_remove_destination(
+                &mut inner,
+                self.client.inner.as_ptr(),
+                self.inner.as_ptr(),
+                uri.as_ptr(),
+            )
+        })?;
+        Ok(AsyncDestination { _publication: self.clone(), inner: inner.into() })
     }
 }
 
@@ -197,6 +244,22 @@ impl Future for AddPublication {
                     e => Poll::Ready(Err(aeron_error(e))),
                 }
             }
+        }
+    }
+}
+
+pub struct AsyncDestination {
+    _publication: Arc<Publication>,
+    inner: SendSyncPtr<aeron_async_destination_t>,
+}
+
+impl AsyncDestination {
+    pub fn poll(&self) -> Result<bool> {
+        let res = unsafe { aeron_publication_async_destination_poll(self.inner.as_ptr()) };
+        if res >= 0 {
+            Ok(res != 0)
+        } else {
+            Err(aeron_error(res))
         }
     }
 }
