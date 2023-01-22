@@ -12,8 +12,8 @@ use aeron_client_sys::{
     aeron_publication_is_connected, aeron_publication_offer, aeron_publication_t,
     aeron_publication_try_claim,
 };
-use core::ffi;
 use std::{
+    ffi,
     ffi::CString,
     mem::MaybeUninit,
     slice,
@@ -47,7 +47,7 @@ impl Publication {
         unsafe { aeron_publication_is_closed(self.inner.as_ptr()) }
     }
 
-    pub fn offer(&mut self, data: &Vec<u8>) -> Result<OfferResult> {
+    pub fn offer(&mut self, data: &[u8]) -> Result<OfferResult> {
         let res = unsafe {
             aeron_publication_offer(
                 self.inner.as_ptr(),
@@ -70,7 +70,7 @@ impl Publication {
 
     pub fn offer_with_reserved_value_supplier<F>(
         &mut self,
-        data: &Vec<u8>,
+        data: &[u8],
         reserved_value_supplier: F,
     ) -> Result<OfferResult>
     where
