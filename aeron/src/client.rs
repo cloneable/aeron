@@ -22,16 +22,16 @@ impl Aeron {
     }
 
     pub fn add_publication(
-        self: Arc<Self>,
-        uri: &String,
+        self: &Arc<Self>,
+        uri: &str,
         stream_id: StreamId,
     ) -> Result<AddPublication> {
         AddPublication::new(self, uri, stream_id)
     }
 
     pub fn add_subscription(
-        self: Arc<Self>,
-        uri: &String,
+        self: &Arc<Self>,
+        uri: &str,
         stream_id: StreamId,
     ) -> Result<AddSubscription> {
         AddSubscription::new(self, uri, stream_id)

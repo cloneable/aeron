@@ -31,11 +31,11 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    fn new(client: Arc<Aeron>, inner: *mut aeron_subscription_t) -> Self {
-        Subscription { client, inner: inner.into() }
+    fn new(client: &Arc<Aeron>, inner: *mut aeron_subscription_t) -> Self {
+        Subscription { client: client.clone(), inner: inner.into() }
     }
 
-    pub fn add_destination(self: &Arc<Subscription>, uri: &str) -> Result<AsyncDestination> {
+    pub fn add_destination(self: &Arc<Self>, uri: &str) -> Result<AsyncDestination> {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
@@ -49,7 +49,7 @@ impl Subscription {
         Ok(AsyncDestination { _subscription: self.clone(), inner: inner.into() })
     }
 
-    pub fn remove_destination(self: &Arc<Subscription>, uri: &str) -> Result<AsyncDestination> {
+    pub fn remove_destination(self: &Arc<Self>, uri: &str) -> Result<AsyncDestination> {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
@@ -217,10 +217,10 @@ enum AddSubscriptionState {
 }
 
 impl AddSubscription {
-    pub(crate) fn new(client: Arc<Aeron>, uri: &String, stream_id: StreamId) -> Result<Self> {
+    pub(crate) fn new(client: &Arc<Aeron>, uri: &str, stream_id: StreamId) -> Result<Self> {
         Ok(AddSubscription {
-            client,
-            state: AddSubscriptionState::Unstarted { uri: uri.clone(), stream_id },
+            client: client.clone(),
+            state: AddSubscriptionState::Unstarted { uri: uri.to_string(), stream_id },
         })
     }
 }
@@ -262,7 +262,7 @@ impl Future for AddSubscription {
                     }
                     1 => {
                         debug_assert_ne!(subscription, ptr::null_mut());
-                        Poll::Ready(Ok(Subscription::new(self_mut.client.clone(), subscription)))
+                        Poll::Ready(Ok(Subscription::new(&self_mut.client, subscription)))
                     }
                     e => Poll::Ready(Err(aeron_error(e))),
                 }

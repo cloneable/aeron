@@ -27,8 +27,8 @@ pub struct Publication {
 }
 
 impl Publication {
-    fn new(client: Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
-        Publication { client, inner: inner.into() }
+    fn new(client: &Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
+        Publication { client: client.clone(), inner: inner.into() }
     }
 
     pub fn channel_status(&self) -> ChannelStatus {
@@ -97,7 +97,7 @@ impl Publication {
         }
     }
 
-    pub fn try_claim(&self, length: usize) -> Result<(BufferClaim, Position)> {
+    pub fn try_claim(&mut self, length: usize) -> Result<(BufferClaim, Position)> {
         let mut buffer_claim: MaybeUninit<aeron_buffer_claim_stct> = MaybeUninit::uninit();
         let ret = unsafe {
             aeron_publication_try_claim(self.inner.as_ptr(), length, buffer_claim.as_mut_ptr())
@@ -109,7 +109,7 @@ impl Publication {
         }
     }
 
-    pub fn add_destination(self: &Arc<Publication>, uri: &str) -> Result<AsyncDestination> {
+    pub fn add_destination(self: &Arc<Self>, uri: &str) -> Result<AsyncDestination> {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
@@ -123,7 +123,7 @@ impl Publication {
         Ok(AsyncDestination { _publication: self.clone(), inner: inner.into() })
     }
 
-    pub fn remove_destination(self: &Arc<Publication>, uri: &str) -> Result<AsyncDestination> {
+    pub fn remove_destination(self: &Arc<Self>, uri: &str) -> Result<AsyncDestination> {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
@@ -197,10 +197,10 @@ enum AddPublicationState {
 }
 
 impl AddPublication {
-    pub(crate) fn new(client: Arc<Aeron>, uri: &String, stream_id: StreamId) -> Result<Self> {
+    pub(crate) fn new(client: &Arc<Aeron>, uri: &str, stream_id: StreamId) -> Result<Self> {
         Ok(AddPublication {
-            client,
-            state: AddPublicationState::Unstarted { uri: uri.clone(), stream_id },
+            client: client.clone(),
+            state: AddPublicationState::Unstarted { uri: uri.to_string(), stream_id },
         })
     }
 }
@@ -239,7 +239,7 @@ impl Future for AddPublication {
                     }
                     1 => {
                         debug_assert_ne!(publication, ptr::null_mut());
-                        Poll::Ready(Ok(Publication::new(self_mut.client.clone(), publication)))
+                        Poll::Ready(Ok(Publication::new(&self_mut.client, publication)))
                     }
                     e => Poll::Ready(Err(aeron_error(e))),
                 }

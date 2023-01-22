@@ -26,7 +26,7 @@ pub async fn main() -> color_eyre::Result<()> {
     let client = Aeron::connect(ctx)?;
 
     let mut publication =
-        client.clone().add_publication(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)?.await?;
+        client.add_publication(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)?.await?;
 
     let subscription = client
         .add_subscription(&DEFAULT_CHANNEL.to_owned(), DEFAULT_STREAM_ID)
