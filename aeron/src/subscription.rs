@@ -79,7 +79,10 @@ impl Subscription {
         unsafe { aeron_subscription_is_closed(self.inner.as_ptr()) }
     }
 
-    pub fn poll<'a, F: FragmentHandler<'a>>(&self, handler: F, fragment_limit: usize) {
+    pub fn poll<F>(&self, handler: F, fragment_limit: usize)
+    where
+        F: for<'a> FnMut(&'a [u8], Header),
+    {
         let mut closure = handler;
         unsafe {
             aeron_subscription_poll(
@@ -91,11 +94,10 @@ impl Subscription {
         };
     }
 
-    pub fn controlled_poll<'a, F: ControlledFragmentHandler<'a>>(
-        &self,
-        handler: F,
-        fragment_limit: usize,
-    ) {
+    pub fn controlled_poll<F>(&self, handler: F, fragment_limit: usize)
+    where
+        F: for<'a> FnMut(&'a [u8], aeron_header_values_t) -> HandlerAction,
+    {
         let mut closure = handler;
         unsafe {
             aeron_subscription_controlled_poll(
@@ -107,7 +109,10 @@ impl Subscription {
         };
     }
 
-    pub fn block_poll<'a, F: BlockHandler<'a>>(&self, handler: F, block_length_limit: usize) {
+    pub fn block_poll<F>(&self, handler: F, block_length_limit: usize)
+    where
+        F: for<'a> FnMut(&'a [u8], SessionId, TermId),
+    {
         let mut closure = handler;
         unsafe {
             aeron_subscription_block_poll(
@@ -146,16 +151,14 @@ impl AsyncDestination {
     }
 }
 
-pub trait FragmentHandler<'a>: FnMut(&'a [u8], Header) {}
-
-impl<'a, F> FragmentHandler<'a> for F where F: FnMut(&'a [u8], Header) {}
-
-unsafe extern "C" fn fragment_handler_trampoline<'a, F: FragmentHandler<'a>>(
+unsafe extern "C" fn fragment_handler_trampoline<F>(
     clientd: *mut ffi::c_void,
     fragment: *const u8,
     fragment_length: usize,
     header: *mut aeron_header_t,
-) {
+) where
+    F: for<'a> FnMut(&'a [u8], Header),
+{
     let mut values: MaybeUninit<aeron_header_values_t> = MaybeUninit::uninit();
     aeron_header_values(header, values.as_mut_ptr()); // TODO: err
     let closure = &mut *(clientd as *mut F);
@@ -172,25 +175,15 @@ pub enum HandlerAction {
 }
 
 // TODO: replace aeron_header_values_t with custom type
-pub trait ControlledFragmentHandler<'a>:
-    FnMut(&'a [u8], aeron_header_values_t) -> HandlerAction
-{
-}
-
-impl<'a, F> ControlledFragmentHandler<'a> for F where
-    F: FnMut(&'a [u8], aeron_header_values_t) -> HandlerAction
-{
-}
-
-unsafe extern "C" fn controlled_fragment_handler_trampoline<
-    'a,
-    F: ControlledFragmentHandler<'a>,
->(
+unsafe extern "C" fn controlled_fragment_handler_trampoline<F>(
     clientd: *mut ffi::c_void,
     buffer: *const u8,
     length: usize,
     header: *mut aeron_header_t,
-) -> u32 {
+) -> u32
+where
+    F: for<'a> FnMut(&'a [u8], aeron_header_values_t) -> HandlerAction,
+{
     let mut values: MaybeUninit<aeron_header_values_t> = MaybeUninit::uninit();
     aeron_header_values(header, values.as_mut_ptr()); // TODO: err
     let closure = &mut *(clientd as *mut F);
@@ -198,17 +191,15 @@ unsafe extern "C" fn controlled_fragment_handler_trampoline<
     closure(fragment, values.assume_init()) as u32
 }
 
-pub trait BlockHandler<'a>: FnMut(&'a [u8], SessionId, TermId) {}
-
-impl<'a, F> BlockHandler<'a> for F where F: FnMut(&'a [u8], SessionId, TermId) {}
-
-unsafe extern "C" fn block_handler_trampoline<'a, F: BlockHandler<'a>>(
+unsafe extern "C" fn block_handler_trampoline<F>(
     clientd: *mut ffi::c_void,
     buffer: *const u8,
     length: usize,
     session_id: i32,
     term_id: i32,
-) {
+) where
+    F: for<'a> FnMut(&'a [u8], SessionId, TermId),
+{
     let closure = &mut *(clientd as *mut F);
     let fragment = slice::from_raw_parts(buffer, length);
     closure(fragment, SessionId(session_id), TermId(term_id));

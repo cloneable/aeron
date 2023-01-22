@@ -49,11 +49,14 @@ impl Publication {
         }
     }
 
-    pub fn offer_with_reserved_value_supplier<'a, F: ReservedValueSupplier<'a>>(
+    pub fn offer_with_reserved_value_supplier<F>(
         &mut self,
         data: &Vec<u8>,
         reserved_value_supplier: F,
-    ) -> Result<OfferResult> {
+    ) -> Result<OfferResult>
+    where
+        F: for<'a> FnMut(&'a mut [u8]) -> i64,
+    {
         let mut closure = reserved_value_supplier;
         let res = unsafe {
             aeron_publication_offer(
@@ -122,15 +125,14 @@ impl BufferClaim {
     }
 }
 
-pub trait ReservedValueSupplier<'a>: FnMut(&'a mut [u8]) -> i64 {}
-
-impl<'a, F> ReservedValueSupplier<'a> for F where F: FnMut(&'a mut [u8]) -> i64 {}
-
-unsafe extern "C" fn reserved_value_supplier_trampoline<'a, F: ReservedValueSupplier<'a>>(
+unsafe extern "C" fn reserved_value_supplier_trampoline<F>(
     clientd: *mut ffi::c_void,
     buffer: *mut u8,
     frame_length: usize,
-) -> i64 {
+) -> i64
+where
+    F: for<'a> FnMut(&'a mut [u8]) -> i64,
+{
     let closure = &mut *(clientd as *mut F);
     let frame = slice::from_raw_parts_mut(buffer, frame_length);
     closure(frame)

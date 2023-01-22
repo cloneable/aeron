@@ -25,7 +25,10 @@ impl Context {
         Ok(Context { inner: inner.into() })
     }
 
-    pub fn set_error_handler<'a, F: ErrorHandler<'a>>(&self, error_handler: F) {
+    pub fn set_error_handler<F>(&self, error_handler: F)
+    where
+        F: for<'a> FnMut(i32, &'a str),
+    {
         let mut closure = error_handler;
         unsafe {
             aeron_context_set_error_handler(
@@ -36,7 +39,10 @@ impl Context {
         };
     }
 
-    pub fn set_on_new_publication<F: OnNewPublication>(&self, on_new_publication: F) {
+    pub fn set_on_new_publication<F>(&mut self, on_new_publication: F)
+    where
+        F: for<'a> FnMut(&'a str, StreamId, SessionId, CorrelationId),
+    {
         let mut closure = on_new_publication;
         unsafe {
             aeron_context_set_on_new_publication(
@@ -47,7 +53,10 @@ impl Context {
         };
     }
 
-    pub fn set_on_new_subscription<F: OnNewSubscription>(&self, on_new_subscription: F) {
+    pub fn set_on_new_subscription<F>(&mut self, on_new_subscription: F)
+    where
+        F: for<'a> FnMut(&'a str, StreamId, CorrelationId),
+    {
         let mut closure = on_new_subscription;
         unsafe {
             aeron_context_set_on_new_subscription(
@@ -77,48 +86,43 @@ impl Drop for Context {
     }
 }
 
-pub trait ErrorHandler<'a>: FnMut(i32, &'a str) {}
-
-impl<'a, F> ErrorHandler<'a> for F where F: FnMut(i32, &'a str) {}
-
-unsafe extern "C" fn error_handler_trampoline<'a, F: ErrorHandler<'a>>(
+unsafe extern "C" fn error_handler_trampoline<F>(
     clientd: *mut c_void,
     code: i32,
-    _message: *const i8,
-) {
-    // let cmsg = CStr::from_ptr(message);
-    // let msg = String::from_utf8_lossy(cmsg.to_bytes()).to_string();
+    message: *const i8,
+) where
+    F: for<'a> FnMut(i32, &'a str),
+{
+    let message = &*CStr::from_ptr(message).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(code, "") // TODO: err msg
+    closure(code, message)
 }
 
-pub trait OnNewPublication: FnMut(StreamId, SessionId, CorrelationId) {}
-
-impl<F> OnNewPublication for F where F: FnMut(StreamId, SessionId, CorrelationId) {}
-
-unsafe extern "C" fn on_new_publication_trampoline<F: OnNewPublication>(
+unsafe extern "C" fn on_new_publication_trampoline<F>(
     clientd: *mut c_void,
     _handle: *mut aeron_client_registering_resource_stct,
-    _channel: *const i8,
+    channel: *const i8,
     stream_id: i32,
     session_id: i32,
     correlation_id: i64,
-) {
+) where
+    F: for<'a> FnMut(&'a str, StreamId, SessionId, CorrelationId),
+{
+    let channel = &*CStr::from_ptr(channel).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(StreamId(stream_id), SessionId(session_id), CorrelationId(correlation_id));
+    closure(channel, StreamId(stream_id), SessionId(session_id), CorrelationId(correlation_id));
 }
 
-pub trait OnNewSubscription: FnMut(StreamId, CorrelationId) {}
-
-impl<F> OnNewSubscription for F where F: FnMut(StreamId, CorrelationId) {}
-
-unsafe extern "C" fn on_new_subscription_trampoline<F: OnNewSubscription>(
+unsafe extern "C" fn on_new_subscription_trampoline<F>(
     clientd: *mut c_void,
     _handle: *mut aeron_client_registering_resource_stct,
-    _channel: *const i8,
+    channel: *const i8,
     stream_id: i32,
     correlation_id: i64,
-) {
+) where
+    F: for<'a> FnMut(&'a str, StreamId, CorrelationId),
+{
+    let channel = &*CStr::from_ptr(channel).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(StreamId(stream_id), CorrelationId(correlation_id));
+    closure(channel, StreamId(stream_id), CorrelationId(correlation_id));
 }
