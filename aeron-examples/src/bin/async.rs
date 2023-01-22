@@ -9,18 +9,18 @@ const DEFAULT_STREAM_ID: StreamId = StreamId(1001);
 
 #[tokio::main]
 pub async fn main() -> color_eyre::Result<()> {
-    let ctx = Context::new()?;
+    let mut ctx = Context::new()?;
 
     ctx.set_error_handler(|code, msg| {
         println!("ERR{code}: {msg}");
     });
 
-    ctx.set_on_new_publication(|stream_id, session_id, correlation_id| {
-        println!("New publication: stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
+    ctx.set_on_new_publication(|channel, stream_id, session_id, correlation_id| {
+        println!("New publication: channel={channel} stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
     });
 
-    ctx.set_on_new_subscription(|stream_id, correlation_id| {
-        println!("New subscription: stream_id={stream_id:?} correlation_id={correlation_id:?}");
+    ctx.set_on_new_subscription(|channel, stream_id, correlation_id| {
+        println!("New subscription: channel={channel} stream_id={stream_id:?} correlation_id={correlation_id:?}");
     });
 
     let client = Aeron::connect(ctx)?;
