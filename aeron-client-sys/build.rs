@@ -9,7 +9,12 @@ pub fn main() -> Result<(), Box<dyn Error + 'static>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
 
     let src_dir = Path::new("aeron").canonicalize()?;
-    let build_dir = Config::new(&src_dir).build_target("aeron_static").build();
+    let build_dir = Config::new(&src_dir)
+        // .define("SANITISE_BUILD", "TRUE")
+        .define("BUILD_AERON_DRIVER", "OFF")
+        .define("BUILD_AERON_ARCHIVE_API", "OFF")
+        .build_target("aeron_static")
+        .build();
 
     let includes = src_dir.join("aeron-client/src/main/c");
     println!("cargo:include={}", includes.display());
