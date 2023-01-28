@@ -5,7 +5,7 @@ pub mod publication;
 pub mod subscription;
 
 use aeron_client_sys::aeron_header_values_t;
-use std::ptr;
+use std::ptr::NonNull;
 
 #[derive(Copy, Clone, Debug)]
 pub struct StreamId(pub i32);
@@ -84,7 +84,7 @@ impl HeaderType {
 }
 
 #[repr(transparent)]
-pub(crate) struct SendSyncPtr<T>(*mut T);
+pub(crate) struct SendSyncPtr<T>(NonNull<T>);
 
 unsafe impl<T> Send for SendSyncPtr<T> {
     // TODO: verify that the C client doesn't use TLS.
@@ -95,14 +95,16 @@ unsafe impl<T> Sync for SendSyncPtr<T> {
 }
 
 impl<T> SendSyncPtr<T> {
+    #[inline(always)]
     pub const fn as_ptr(&self) -> *mut T {
-        self.0 as *mut T
+        self.0.as_ptr()
     }
 }
 
 impl<T> From<*mut T> for SendSyncPtr<T> {
+    #[inline(always)]
     fn from(inner: *mut T) -> Self {
-        debug_assert_ne!(inner, ptr::null_mut());
-        SendSyncPtr(inner)
+        debug_assert!(!inner.is_null());
+        SendSyncPtr(unsafe { NonNull::new_unchecked(inner) })
     }
 }
