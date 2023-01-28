@@ -19,9 +19,8 @@ pub struct Context {
 
 impl Context {
     pub fn new() -> Result<Self, Error> {
-        let mut inner = core::ptr::null_mut();
+        let mut inner = ptr::null_mut();
         aeron_result(unsafe { aeron_context_init(&mut inner) })?;
-        debug_assert_ne!(inner, ptr::null_mut());
         Ok(Context { inner: inner.into() })
     }
 
@@ -69,7 +68,7 @@ impl Context {
 
     pub fn get_dir(&self) -> String {
         let dir = unsafe { aeron_context_get_dir(self.inner.as_ptr()) };
-        if dir != ptr::null() {
+        if !dir.is_null() {
             unsafe {
                 let cs = CStr::from_ptr(dir as *mut i8);
                 CString::from(cs).into_string().expect("string")
