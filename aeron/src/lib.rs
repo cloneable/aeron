@@ -4,7 +4,7 @@ pub mod error;
 pub mod publication;
 pub mod subscription;
 
-use aeron_client_sys::aeron_header_values_t;
+use aeron_client_sys as sys;
 use std::ptr::NonNull;
 
 #[derive(Copy, Clone, Debug)]
@@ -31,7 +31,7 @@ pub enum ChannelStatus {
 }
 
 #[derive(Clone, Debug)]
-pub struct Header(aeron_header_values_t);
+pub struct Header(sys::aeron_header_values_t);
 
 impl Header {
     pub fn version(&self) -> i8 {

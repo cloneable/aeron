@@ -5,19 +5,19 @@ use crate::{
     subscription::AddSubscription,
     SendSyncPtr, StreamId,
 };
-use aeron_client_sys::{aeron_close, aeron_init, aeron_start, aeron_t};
+use aeron_client_sys as sys;
 use std::{ptr, sync::Arc};
 
 pub struct Aeron {
     pub context: Context,
-    pub(crate) inner: SendSyncPtr<aeron_t>,
+    pub(crate) inner: SendSyncPtr<sys::aeron_t>,
 }
 
 impl Aeron {
     pub fn connect(context: Context) -> Result<Arc<Self>> {
         let mut inner = ptr::null_mut();
-        aeron_result(unsafe { aeron_init(&mut inner, context.inner.as_ptr()) })?;
-        aeron_result(unsafe { aeron_start(inner) })?;
+        aeron_result(unsafe { sys::aeron_init(&mut inner, context.inner.as_ptr()) })?;
+        aeron_result(unsafe { sys::aeron_start(inner) })?;
         Ok(Arc::new(Aeron { context, inner: inner.into() }))
     }
 
@@ -40,6 +40,6 @@ impl Aeron {
 
 impl Drop for Aeron {
     fn drop(&mut self) {
-        aeron_result(unsafe { aeron_close(self.inner.as_ptr()) }).ok(); // TODO: err
+        aeron_result(unsafe { sys::aeron_close(self.inner.as_ptr()) }).ok(); // TODO: err
     }
 }

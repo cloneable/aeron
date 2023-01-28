@@ -3,15 +3,7 @@ use crate::{
     error::{aeron_error, aeron_result, Result},
     ChannelStatus, Position, SendSyncPtr, StreamId,
 };
-use aeron_client_sys::{
-    aeron_async_add_publication, aeron_async_add_publication_poll, aeron_async_add_publication_t,
-    aeron_async_destination_t, aeron_buffer_claim_abort, aeron_buffer_claim_commit,
-    aeron_buffer_claim_stct, aeron_publication_async_add_destination,
-    aeron_publication_async_destination_poll, aeron_publication_async_remove_destination,
-    aeron_publication_channel_status, aeron_publication_close, aeron_publication_is_closed,
-    aeron_publication_is_connected, aeron_publication_offer, aeron_publication_t,
-    aeron_publication_try_claim,
-};
+use aeron_client_sys as sys;
 use std::{
     ffi,
     ffi::CString,
@@ -23,16 +15,16 @@ use std::{
 
 pub struct Publication {
     client: Arc<Aeron>,
-    inner: SendSyncPtr<aeron_publication_t>,
+    inner: SendSyncPtr<sys::aeron_publication_t>,
 }
 
 impl Publication {
-    fn new(client: &Arc<Aeron>, inner: *mut aeron_publication_t) -> Self {
+    fn new(client: &Arc<Aeron>, inner: *mut sys::aeron_publication_t) -> Self {
         Publication { client: client.clone(), inner: inner.into() }
     }
 
     pub fn channel_status(&self) -> ChannelStatus {
-        match unsafe { aeron_publication_channel_status(self.inner.as_ptr()) } {
+        match unsafe { sys::aeron_publication_channel_status(self.inner.as_ptr()) } {
             1 => ChannelStatus::Active,
             -1 => ChannelStatus::Errored,
             v => ChannelStatus::Other(v),
@@ -40,16 +32,16 @@ impl Publication {
     }
 
     pub fn is_connected(&self) -> bool {
-        unsafe { aeron_publication_is_connected(self.inner.as_ptr()) }
+        unsafe { sys::aeron_publication_is_connected(self.inner.as_ptr()) }
     }
 
     pub fn is_closed(&self) -> bool {
-        unsafe { aeron_publication_is_closed(self.inner.as_ptr()) }
+        unsafe { sys::aeron_publication_is_closed(self.inner.as_ptr()) }
     }
 
     pub fn offer(&mut self, data: &[u8]) -> Result<OfferResult> {
         let res = unsafe {
-            aeron_publication_offer(
+            sys::aeron_publication_offer(
                 self.inner.as_ptr(),
                 data.as_ptr(),
                 data.len(),
@@ -78,7 +70,7 @@ impl Publication {
     {
         let mut closure = reserved_value_supplier;
         let res = unsafe {
-            aeron_publication_offer(
+            sys::aeron_publication_offer(
                 self.inner.as_ptr(),
                 data.as_ptr(),
                 data.len(),
@@ -98,9 +90,9 @@ impl Publication {
     }
 
     pub fn try_claim(&mut self, length: usize) -> Result<(BufferClaim, Position)> {
-        let mut buffer_claim: MaybeUninit<aeron_buffer_claim_stct> = MaybeUninit::uninit();
+        let mut buffer_claim: MaybeUninit<sys::aeron_buffer_claim_stct> = MaybeUninit::uninit();
         let ret = unsafe {
-            aeron_publication_try_claim(self.inner.as_ptr(), length, buffer_claim.as_mut_ptr())
+            sys::aeron_publication_try_claim(self.inner.as_ptr(), length, buffer_claim.as_mut_ptr())
         };
         if ret >= 0 {
             Ok((BufferClaim { inner: unsafe { buffer_claim.assume_init() } }, Position(ret)))
@@ -113,7 +105,7 @@ impl Publication {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
-            aeron_publication_async_add_destination(
+            sys::aeron_publication_async_add_destination(
                 &mut inner,
                 self.client.inner.as_ptr(),
                 self.inner.as_ptr(),
@@ -127,7 +119,7 @@ impl Publication {
         let uri = CString::new(uri.as_bytes())?;
         let mut inner = ptr::null_mut();
         aeron_result(unsafe {
-            aeron_publication_async_remove_destination(
+            sys::aeron_publication_async_remove_destination(
                 &mut inner,
                 self.client.inner.as_ptr(),
                 self.inner.as_ptr(),
@@ -141,7 +133,7 @@ impl Publication {
 impl Drop for Publication {
     fn drop(&mut self) {
         aeron_result(unsafe {
-            aeron_publication_close(self.inner.as_ptr(), None, ptr::null_mut())
+            sys::aeron_publication_close(self.inner.as_ptr(), None, ptr::null_mut())
         })
         .ok();
     }
@@ -155,7 +147,7 @@ pub enum OfferResult {
 }
 
 pub struct BufferClaim {
-    inner: aeron_buffer_claim_stct,
+    inner: sys::aeron_buffer_claim_stct,
 }
 
 impl BufferClaim {
@@ -164,11 +156,11 @@ impl BufferClaim {
     }
 
     pub fn commit(mut self) -> Result<()> {
-        aeron_result(unsafe { aeron_buffer_claim_commit(&mut self.inner) })
+        aeron_result(unsafe { sys::aeron_buffer_claim_commit(&mut self.inner) })
     }
 
     pub fn abort(mut self) -> Result<()> {
-        aeron_result(unsafe { aeron_buffer_claim_abort(&mut self.inner) })
+        aeron_result(unsafe { sys::aeron_buffer_claim_abort(&mut self.inner) })
     }
 }
 
@@ -193,7 +185,7 @@ pub struct AddPublication {
 
 enum AddPublicationState {
     Unstarted { uri: String, stream_id: StreamId },
-    Polling { inner: SendSyncPtr<aeron_async_add_publication_t> },
+    Polling { inner: SendSyncPtr<sys::aeron_async_add_publication_t> },
 }
 
 impl AddPublication {
@@ -216,7 +208,7 @@ impl Future for AddPublication {
 
                 let mut inner = ptr::null_mut();
                 aeron_result(unsafe {
-                    aeron_async_add_publication(
+                    sys::aeron_async_add_publication(
                         &mut inner,
                         self_mut.client.inner.as_ptr(),
                         s.as_ptr(),
@@ -231,8 +223,9 @@ impl Future for AddPublication {
             }
             AddPublicationState::Polling { inner } => {
                 let mut publication = ptr::null_mut();
-                match unsafe { aeron_async_add_publication_poll(&mut publication, inner.as_ptr()) }
-                {
+                match unsafe {
+                    sys::aeron_async_add_publication_poll(&mut publication, inner.as_ptr())
+                } {
                     0 => {
                         ctx.waker().wake_by_ref();
                         Poll::Pending
@@ -250,12 +243,12 @@ impl Future for AddPublication {
 
 pub struct AsyncDestination {
     _publication: Arc<Publication>,
-    inner: SendSyncPtr<aeron_async_destination_t>,
+    inner: SendSyncPtr<sys::aeron_async_destination_t>,
 }
 
 impl AsyncDestination {
     pub fn poll(&self) -> Result<bool> {
-        let res = unsafe { aeron_publication_async_destination_poll(self.inner.as_ptr()) };
+        let res = unsafe { sys::aeron_publication_async_destination_poll(self.inner.as_ptr()) };
         if res >= 0 {
             Ok(res != 0)
         } else {

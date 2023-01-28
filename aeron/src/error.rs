@@ -1,4 +1,4 @@
-use aeron_client_sys::aeron_errmsg;
+use aeron_client_sys as sys;
 use std::ffi::{CStr, NulError};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -20,7 +20,7 @@ pub(crate) fn aeron_result(code: i32) -> Result<()> {
 }
 
 pub(crate) fn aeron_error(code: i32) -> Error {
-    let msg = unsafe { CStr::from_ptr(aeron_errmsg()) }.to_string_lossy();
+    let msg = unsafe { CStr::from_ptr(sys::aeron_errmsg()) }.to_string_lossy();
     println!("aeron_result: {code}");
     Error::FfiError(code, msg.to_string())
 }
