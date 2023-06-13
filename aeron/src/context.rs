@@ -22,7 +22,7 @@ impl Context {
 
     pub fn set_error_handler<F>(&self, error_handler: F)
     where
-        F: for<'a> FnMut(i32, &'a str),
+        F: for<'a> FnMut(ErrorEvent<'a>),
     {
         let mut closure = error_handler;
         unsafe {
@@ -36,7 +36,7 @@ impl Context {
 
     pub fn set_on_new_publication<F>(&mut self, on_new_publication: F)
     where
-        F: for<'a> FnMut(&'a str, StreamId, SessionId, CorrelationId),
+        F: for<'a> FnMut(NewPublication<'a>),
     {
         let mut closure = on_new_publication;
         unsafe {
@@ -50,7 +50,7 @@ impl Context {
 
     pub fn set_on_new_subscription<F>(&mut self, on_new_subscription: F)
     where
-        F: for<'a> FnMut(&'a str, StreamId, CorrelationId),
+        F: for<'a> FnMut(NewSubscription<'a>),
     {
         let mut closure = on_new_subscription;
         unsafe {
@@ -82,16 +82,40 @@ impl Drop for Context {
     }
 }
 
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ErrorEvent<'a> {
+    pub code: i32,
+    pub message: &'a str,
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct NewPublication<'a> {
+    pub channel: &'a str,
+    pub stream_id: StreamId,
+    pub session_id: SessionId,
+    pub correlation_id: CorrelationId,
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct NewSubscription<'a> {
+    pub channel: &'a str,
+    pub stream_id: StreamId,
+    pub correlation_id: CorrelationId,
+}
+
 unsafe extern "C" fn error_handler_trampoline<F>(
     clientd: *mut c_void,
     code: i32,
     message: *const i8,
 ) where
-    F: for<'a> FnMut(i32, &'a str),
+    F: for<'a> FnMut(ErrorEvent<'a>),
 {
     let message = &*CStr::from_ptr(message).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(code, message)
+    closure(ErrorEvent { code, message })
 }
 
 unsafe extern "C" fn on_new_publication_trampoline<F>(
@@ -102,11 +126,16 @@ unsafe extern "C" fn on_new_publication_trampoline<F>(
     session_id: i32,
     correlation_id: i64,
 ) where
-    F: for<'a> FnMut(&'a str, StreamId, SessionId, CorrelationId),
+    F: for<'a> FnMut(NewPublication<'a>),
 {
     let channel = &*CStr::from_ptr(channel).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(channel, StreamId(stream_id), SessionId(session_id), CorrelationId(correlation_id));
+    closure(NewPublication {
+        channel,
+        stream_id: StreamId(stream_id),
+        session_id: SessionId(session_id),
+        correlation_id: CorrelationId(correlation_id),
+    });
 }
 
 unsafe extern "C" fn on_new_subscription_trampoline<F>(
@@ -116,9 +145,13 @@ unsafe extern "C" fn on_new_subscription_trampoline<F>(
     stream_id: i32,
     correlation_id: i64,
 ) where
-    F: for<'a> FnMut(&'a str, StreamId, CorrelationId),
+    F: for<'a> FnMut(NewSubscription<'a>),
 {
     let channel = &*CStr::from_ptr(channel).to_string_lossy();
     let closure = &mut *(clientd as *mut F);
-    closure(channel, StreamId(stream_id), CorrelationId(correlation_id));
+    closure(NewSubscription {
+        channel,
+        stream_id: StreamId(stream_id),
+        correlation_id: CorrelationId(correlation_id),
+    });
 }

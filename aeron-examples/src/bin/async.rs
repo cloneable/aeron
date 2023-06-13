@@ -13,33 +13,46 @@ const DEFAULT_STREAM_ID: StreamId = StreamId(1001);
 #[tokio::main]
 pub async fn main() -> color_eyre::Result<()> {
     let mut ctx = Context::new()?;
-    ctx.set_error_handler(|code, msg| {
-        println!("P: ERR{code}: {msg}");
-    });
-    ctx.set_on_new_publication(|channel, stream_id, session_id, correlation_id| {
-        println!("P: New publication: channel={channel} stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
-    });
-    ctx.set_on_new_subscription(|channel, stream_id, correlation_id| {
-        println!("P: New subscription: channel={channel} stream_id={stream_id:?} correlation_id={correlation_id:?}");
-    });
-    let client_p = Aeron::connect(ctx)?;
 
-    let mut publication = client_p.add_publication(DEFAULT_CHANNEL, DEFAULT_STREAM_ID)?.await?;
+    ctx.set_error_handler(|e| {
+        println!("P: ERR{}: {}", e.code, e.message);
+    });
+    ctx.set_on_new_publication(|p| {
+        println!(
+            "P: New publication: channel={} stream_id={:?} session_id={:?} correlation_id={:?}",
+            p.channel, p.stream_id, p.session_id, p.correlation_id
+        );
+    });
+    ctx.set_on_new_subscription(|s| {
+        println!(
+            "P: New subscription: channel={} stream_id={:?} correlation_id={:?}",
+            s.channel, s.stream_id, s.correlation_id
+        );
+    });
+    let client_pub = Aeron::connect(ctx)?;
+
+    let mut publication = client_pub.add_publication(DEFAULT_CHANNEL, DEFAULT_STREAM_ID)?.await?;
 
     let mut ctx = Context::new()?;
-    ctx.set_error_handler(|code, msg| {
-        println!("S: ERR{code}: {msg}");
+    ctx.set_error_handler(|e| {
+        println!("S: ERR{}: {}", e.code, e.message);
     });
-    ctx.set_on_new_publication(|channel, stream_id, session_id, correlation_id| {
-        println!("S: New publication: channel={channel} stream_id={stream_id:?} session_id={session_id:?} correlation_id={correlation_id:?}");
+    ctx.set_on_new_publication(|p| {
+        println!(
+            "S: New publication: channel={} stream_id={:?} session_id={:?} correlation_id={:?}",
+            p.channel, p.stream_id, p.session_id, p.correlation_id
+        );
     });
-    ctx.set_on_new_subscription(|channel, stream_id, correlation_id| {
-        println!("S: New subscription: channel={channel} stream_id={stream_id:?} correlation_id={correlation_id:?}");
+    ctx.set_on_new_subscription(|s| {
+        println!(
+            "S: New subscription: channel={} stream_id={:?} correlation_id={:?}",
+            s.channel, s.stream_id, s.correlation_id
+        );
     });
-    let client_s = Aeron::connect(ctx)?;
+    let client_sub = Aeron::connect(ctx)?;
 
     let subscription =
-        client_s.add_subscription(DEFAULT_CHANNEL, DEFAULT_STREAM_ID).unwrap().await.unwrap();
+        client_sub.add_subscription(DEFAULT_CHANNEL, DEFAULT_STREAM_ID).unwrap().await.unwrap();
 
     let handle = tokio::spawn(async move {
         let stop = AtomicBool::new(false);
