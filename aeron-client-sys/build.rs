@@ -9,10 +9,18 @@ pub fn main() -> Result<(), Box<dyn Error + 'static>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
 
     let src_dir = Path::new("aeron").canonicalize()?;
+
     let build_dir = Config::new(&src_dir)
-        // .define("SANITISE_BUILD", "TRUE")
+        .define("C_WARNINGS_AS_ERRORS", "TRUE")
+        .define("STANDALONE_BUILD", "FALSE")
         .define("BUILD_AERON_DRIVER", "OFF")
         .define("BUILD_AERON_ARCHIVE_API", "OFF")
+        .define("AERON_TESTS", "FALSE")
+        .define("AERON_UNIT_TESTS", "FALSE")
+        .define("AERON_SYSTEM_TESTS", "FALSE")
+        .define("AERON_BUILD_SAMPLES", "FALSE")
+        .define("AERON_BUILD_DOCUMENTATION", "FALSE")
+        .define("AERON_INSTALL_TARGETS", "FALSE")
         .build_target("aeron_static")
         .build();
 

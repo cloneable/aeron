@@ -2,6 +2,17 @@
 name = "aeron-client-sys"
 version = "1.42.0"
 edition = "2021"
+include = [
+  "/src/",
+  "/aeron/CMakeLists.txt",
+  "/aeron/LICENSE",
+  "/aeron/version.txt",
+  "/aeron/aeron-client/src/main/c/",
+  "/aeron/aeron-client/src/main/cpp/",
+  "/aeron/aeron-client/src/main/cpp_wrapper/",
+  "/build.rs",
+  "/wrapper.h",
+]
 
 [build-dependencies]
 bindgen = "0.66"
