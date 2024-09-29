@@ -4,9 +4,6 @@ use std::{
     time::Duration,
 };
 
-#[global_allocator]
-static ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 const DEFAULT_CHANNEL: &str = "aeron:udp?endpoint=localhost:20121";
 const DEFAULT_STREAM_ID: StreamId = StreamId(1001);
 

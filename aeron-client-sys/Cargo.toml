@@ -1,6 +1,6 @@
 [package]
 name = "aeron-client-sys"
-version = "1.42.0"
+version = "1.46.5"
 edition = "2021"
 include = [
   "/src/",
@@ -15,5 +15,5 @@ include = [
 ]
 
 [build-dependencies]
-bindgen = "0.66"
+bindgen = "0.70"
 cmake = "0.1"

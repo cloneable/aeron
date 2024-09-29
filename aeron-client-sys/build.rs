@@ -34,7 +34,7 @@ pub fn main() -> Result<(), Box<dyn Error + 'static>> {
     bindgen::builder()
         .use_core()
         .header("wrapper.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .allowlist_function("aeron_.*")
         .clang_arg(format!("-I{}", includes.display()))
         .generate()?
