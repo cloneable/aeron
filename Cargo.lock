@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "aeron-client-sys"
-version = "1.46.5"
+version = "1.46.6"
 dependencies = [
  "bindgen",
  "cmake",
