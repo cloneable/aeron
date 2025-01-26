@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 aeron-client-sys = { path = "../aeron-client-sys" }
-thiserror = "1"
+thiserror = "2"
